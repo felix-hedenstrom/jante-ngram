@@ -25,49 +25,100 @@ class NGramManager:
         
         self._connection.commit()
 
-    def generate_ngrams(text, n, pad_right=True, pad_left=True):
+    def generate_ngrams(text, n, pad_right=True, pad_left=True, right_pad_symbol=RIGHT_PAD_SYMBOL, left_pad_symbol=LEFT_PAD_SYMBOL):
         return list(nltk.ngrams(
                 nltk.pad_sequence(
                     text.split(),
-                    pad_left=pad_left, left_pad_symbol=LEFT_PAD_SYMBOL,
-                    pad_right=pad_right, right_pad_symbol=RIGHT_PAD_SYMBOL,
+                    pad_left=pad_left, left_pad_symbol=left_pad_symbol,
+                    pad_right=pad_right, right_pad_symbol=right_pad_symbol,
                     n=n),
                  n=n))
 
-    def generate(self, seed=""):
+    def generate(self, seed="", ending="", max_length=12, min_length=4, limit=1):
 
         cursor = self._connection.cursor() 
 
-        ngrams = NGramManager.generate_ngrams(seed, n=3, pad_right=False)
+        ngrams = NGramManager.generate_ngrams(seed, n=2, pad_right=False)
+
+        target_ngrams = NGramManager.generate_ngrams(ending, n=2, pad_right=False, left_pad_symbol=None)
 
         if len(ngrams) == 0:
-            last_ngram = ["<s>", "<s>", "<s>"]
+            seed_ngram = [LEFT_PAD_SYMBOL] * 3 
         else:
-            last_ngram = ngrams[-1]
+            seed_ngram = ngrams[-1]
+
+        if len(target_ngrams) == 0:
+            target_ngram = [RIGHT_PAD_SYMBOL] * 3
+        else:
+            target_ngram = target_ngrams[0]
 
         cursor.execute("""
+        WITH GeneratedSentance AS
+        (
+            -- Base condition
+            SELECT
+                TokenText1 || " " || TokenText2 || " " || TokenText3 AS SentanceText, 
+                TokenText2,
+                TokenText3,
+                1 AS Depth
+            FROM
+                NGram
+            WHERE
+                (
+                    TokenText1 = :seedw1 
+                )
+                AND
+                (
+                    TokenText2 = :seedw2
+                )
+
+            UNION ALL
+
+            SELECT
+                GS.SentanceText || " " || NG.TokenText3 AS SentanceText,
+                NG.TokenText2,
+                NG.TokenText3,
+                GS.Depth + 1
+            FROM
+                GeneratedSentance GS
+                JOIN NGram NG ON
+                    NG.TokenText1 = GS.TokenText2 AND
+                    NG.TokenText2 = GS.TokenText3
+            WHERE
+                GS.Depth <= :max_depth
+
+        ) 
         SELECT
-            TokenText1,
-            TokenText2,
-            TokenText3
+            GS.SentanceText
         FROM
-            NGram
+            GeneratedSentance GS
         WHERE
+            GS.Depth >= :min_depth AND
             (
-                TokenText1 = :word2 
+                GS.TokenText2 = :targetw1 
                 OR 
-                :word1 IS NULL
+                :targetw1 IS NULL
             )
             AND
             (
-                TokenText2 = :word3
+                GS.TokenText3 = :targetw2
                 OR
-                :word2 IS NULL
+                :targetw2 IS NULL
             )
+        LIMIT
+            :limit
+        """, {  
+                "limit": limit,
+                "end_token": RIGHT_PAD_SYMBOL, 
+                "min_depth": min_length, 
+                "max_depth": max_length, 
+                "seedw1": seed_ngram[0], 
+                "seedw2": seed_ngram[1], 
+                "targetw1": target_ngram[0],
+                "targetw2": target_ngram[1]
+            })
 
-        """, {"word1": last_ngram[0], "word2": last_ngram[1], "word3": last_ngram[2]})
-
-        return cursor.fetchall()
+        return list(map(lambda x: x[0], cursor.fetchall()))
 
 
     def insert(self, text):
@@ -75,21 +126,27 @@ class NGramManager:
         cursor = self._connection.cursor() 
         
             
-        ngrams = NGramManager.generate_ngrams(text, 3)
+        for line in text.split("\n"):
 
-        cursor.executemany("""
-        INSERT OR IGNORE INTO NGram
-        (
-            TokenText1,
-            TokenText2,
-            TokenText3
-        )
-        VALUES
-        (
-            ?,
-            ?,
-            ?
-        )""", ngrams)
+            if line.strip() == "":
+                continue
+            
+            ngrams = NGramManager.generate_ngrams(line, 3)
+
+            cursor.executemany("""
+            INSERT OR IGNORE INTO NGram
+            (
+                TokenText1,
+                TokenText2,
+                TokenText3
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?
+            )""", ngrams)
+
 
         self._connection.commit()
         
