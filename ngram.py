@@ -36,7 +36,31 @@ class NGramManager:
                     n=n),
                  n=n))
 
-    def generate(self, seed="", ending="", max_length=12, min_length=4, limit=1):
+    def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000):
+        """Generate sentances from the ngrams
+
+        Generate a text based on chained ngrams
+
+        Parameters
+
+        seed : str
+            Word(s) that will start the chain
+        ending : str
+            Word(s) that will end the chain
+        max_length : int
+        min_length : int
+            should be smaller or equal to max_length
+        limit : int
+            max number of returned ngrams
+        row_limit : int
+            max number of ngrams that will be kept in memory.
+        """
+
+        if max_length is None:
+            max_length = min_length + 10
+
+        if max_length < min_length:
+            raise ValueError("max_length cannot be lower than min_length") 
 
         cursor = self._connection.cursor() 
 
@@ -88,6 +112,7 @@ class NGramManager:
                     NG.TokenText2 = GS.TokenText3
             WHERE
                 GS.Depth <= :max_depth
+            LIMIT :row_limit 
 
         ) 
         SELECT
@@ -117,7 +142,8 @@ class NGramManager:
                 "seedw1": seed_ngram[0], 
                 "seedw2": seed_ngram[1], 
                 "targetw1": target_ngram[0],
-                "targetw2": target_ngram[1]
+                "targetw2": target_ngram[1],
+                "row_limit": row_limit
             })
 
         return list(map(lambda x: x[0], cursor.fetchall()))
