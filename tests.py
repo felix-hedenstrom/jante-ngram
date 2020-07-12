@@ -2,11 +2,16 @@
 # -*- coding: utf-8 -*-
 import ngram
 import sqlite3
+import os
 
 if __name__ == "__main__":
+    
+    path = "/tmp/test.db"
 
-    #path = "/tmp/test.db"
-    path = ":memory:"
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
 
     ngm = ngram.NGramManager(path)
 
@@ -34,3 +39,5 @@ if __name__ == "__main__":
     elapsed = time.time() - start
 
     print(elapsed)
+
+    print(list(ngm.get_all())[:10])

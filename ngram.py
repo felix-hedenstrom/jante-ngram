@@ -11,9 +11,9 @@ class NGramManager:
 
         self._db_path = path
 
-        self._connection = sqlite3.connect(self._db_path)
+        connection = sqlite3.connect(self._db_path)
 
-        cursor = self._connection.cursor() 
+        cursor = connection.cursor() 
 
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS NGram 
@@ -25,7 +25,8 @@ class NGramManager:
         )
         """)
         
-        self._connection.commit()
+        connection.commit()
+        connection.close()
 
     def generate_ngrams(text, n, pad_right=True, pad_left=True, right_pad_symbol=RIGHT_PAD_SYMBOL, left_pad_symbol=LEFT_PAD_SYMBOL):
         return list(nltk.ngrams(
@@ -62,7 +63,9 @@ class NGramManager:
         if max_length < min_length:
             raise ValueError("max_length cannot be lower than min_length") 
 
-        cursor = self._connection.cursor() 
+        connection = sqlite3.connect(self._db_path)
+
+        cursor = connection.cursor() 
 
         ngrams = NGramManager.generate_ngrams(seed, n=2, pad_right=False)
 
@@ -151,13 +154,17 @@ class NGramManager:
                 "row_limit": row_limit
             })
 
-        return list(map(lambda x: x[0], cursor.fetchall()))
+        try:
+            return list(map(lambda x: x[0], cursor.fetchall()))
+        finally: 
+            connection.close()
 
 
     def insert(self, text):
 
-        cursor = self._connection.cursor() 
-        
+        connection = sqlite3.connect(self._db_path)
+
+        cursor = connection.cursor() 
             
         for line in text.split("\n"):
 
@@ -181,7 +188,8 @@ class NGramManager:
             )""", ngrams)
 
 
-        self._connection.commit()
+        connection.commit()
+        connection.close()
         
         
 
