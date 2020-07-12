@@ -36,7 +36,7 @@ class NGramManager:
                     n=n),
                  n=n))
 
-    def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000):
+    def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000, rand=False):
         """Generate sentances from the ngrams
 
         Generate a text based on chained ngrams
@@ -78,7 +78,7 @@ class NGramManager:
         else:
             target_ngram = target_ngrams[0]
 
-        cursor.execute("""
+        sql = f"""
         WITH GeneratedSentance AS
         (
             -- Base condition
@@ -87,6 +87,7 @@ class NGramManager:
                 TokenText2,
                 TokenText3,
                 1 AS Depth
+                {',RANDOM()' if rand else ''} 
             FROM
                 NGram
             WHERE
@@ -105,6 +106,7 @@ class NGramManager:
                 NG.TokenText2,
                 NG.TokenText3,
                 GS.Depth + 1
+                {',RANDOM()' if rand else ''} 
             FROM
                 GeneratedSentance GS
                 JOIN NGram NG ON
@@ -112,6 +114,7 @@ class NGramManager:
                     NG.TokenText2 = GS.TokenText3
             WHERE
                 GS.Depth <= :max_depth
+            {'ORDER BY RANDOM()' if rand else ''} 
             LIMIT :row_limit 
 
         ) 
@@ -134,7 +137,9 @@ class NGramManager:
             )
         LIMIT
             :limit
-        """, {  
+        """
+
+        cursor.execute(sql, {  
                 "limit": limit,
                 "end_token": RIGHT_PAD_SYMBOL, 
                 "min_depth": min_length, 

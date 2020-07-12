@@ -28,7 +28,8 @@ if __name__ == "__main__":
     import time
 
     start = time.time()
-    print(ngm.generate("this", "you", min_length=5, limit=20))
+    print(ngm.generate("this", "you", min_length=10, limit=20, rand=True))
+    print(ngm.generate("this", min_length=5, limit=10))
     print(ngm.generate("this is", min_length=7, max_length=7))
     elapsed = time.time() - start
 
