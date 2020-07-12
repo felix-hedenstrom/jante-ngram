@@ -2,12 +2,17 @@
 # -*- coding: utf-8 -*-
 import sqlite3
 import nltk
+import os
 
 LEFT_PAD_SYMBOL = "<s>"
 RIGHT_PAD_SYMBOL = "</s>"
+NEWLINE = os.linesep 
 
 class NGramManager:
-    def __init__(self, path):
+    def __init__(self, path, n=3):
+
+        if not type(n) == int:
+            return ValueError("n must be an integer")
 
         self._db_path = path
 
@@ -15,15 +20,24 @@ class NGramManager:
 
         cursor = connection.cursor() 
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS NGram 
+        self._n = n
+
+        sql = f"""
+        CREATE TABLE IF NOT EXISTS NGram{n} 
         (
-            TokenText1 TEXT NOT NULL,
-            TokenText2 TEXT NOT NULL,
-            TokenText3 TEXT NOT NULL,
-            PRIMARY KEY  (TokenText1, TokenText2, TokenText3)
-        )
-        """)
+
+            {("," + NEWLINE).join(
+                map(
+                    lambda i: 
+                        "TokenText" + str(i) + " TEXT NOT NULL", 
+                    range(1, self._n + 1)))}
+            ,PRIMARY KEY ({",".join(
+                                map(
+                                    lambda i: f"TokenText{i}", 
+                                    range(1, n + 1)))})
+        )"""
+
+        cursor.execute(sql)
         
         connection.commit()
         connection.close()
@@ -43,14 +57,11 @@ class NGramManager:
 
         cursor = connection.cursor() 
 
-        sql = """
-            
+        sql = f"""
         SELECT
-            TokenText1,
-            TokenText2,
-            TokenText3
+            {",".join(map(lambda i: "TokenText" + str(i), range(1, self._n + 1)))} 
         FROM
-            NGram
+            NGram{self._n}
         """
 
         cursor.execute(sql)
@@ -90,17 +101,17 @@ class NGramManager:
 
         cursor = connection.cursor() 
 
-        ngrams = NGramManager.generate_ngrams(seed, n=2, pad_right=False)
+        ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
 
-        target_ngrams = NGramManager.generate_ngrams(ending, n=2, pad_right=False, left_pad_symbol=None)
+        target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_right=False, left_pad_symbol=None)
 
         if len(ngrams) == 0:
-            seed_ngram = [LEFT_PAD_SYMBOL] * 3 
+            seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
         else:
             seed_ngram = ngrams[-1]
 
         if len(target_ngrams) == 0:
-            target_ngram = [RIGHT_PAD_SYMBOL] * 3
+            target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
         else:
             target_ngram = target_ngrams[0]
 
@@ -115,7 +126,7 @@ class NGramManager:
                 1 AS Depth
                 {',RANDOM()' if rand else ''} 
             FROM
-                NGram
+                NGram{self._n}
             WHERE
                 (
                     TokenText1 = :seedw1 
@@ -135,7 +146,7 @@ class NGramManager:
                 {',RANDOM()' if rand else ''} 
             FROM
                 GeneratedSentance GS
-                JOIN NGram NG ON
+                JOIN NGram{self._n} NG ON
                     NG.TokenText1 = GS.TokenText2 AND
                     NG.TokenText2 = GS.TokenText3
             WHERE
@@ -188,27 +199,24 @@ class NGramManager:
         connection = sqlite3.connect(self._db_path)
 
         cursor = connection.cursor() 
+
+        sql = f"""
+            INSERT OR IGNORE INTO NGram{self._n} (
+                {",".join(map(lambda i: "TokenText" + str(i), range(1, self._n + 1)))}
+            )
+            VALUES
+            (
+                {",".join(["?"] * self._n)}
+            )"""
             
         for line in text.split("\n"):
 
             if line.strip() == "":
                 continue
             
-            ngrams = NGramManager.generate_ngrams(line, 3)
+            ngrams = NGramManager.generate_ngrams(line, self._n)
 
-            cursor.executemany("""
-            INSERT OR IGNORE INTO NGram
-            (
-                TokenText1,
-                TokenText2,
-                TokenText3
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?
-            )""", ngrams)
+            cursor.executemany(sql, ngrams)
 
 
         connection.commit()
