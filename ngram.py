@@ -36,6 +36,29 @@ class NGramManager:
                     pad_right=pad_right, right_pad_symbol=right_pad_symbol,
                     n=n),
                  n=n))
+    
+    def get_all(self):
+
+        connection = sqlite3.connect(self._db_path)
+
+        cursor = connection.cursor() 
+
+        sql = """
+            
+        SELECT
+            TokenText1,
+            TokenText2,
+            TokenText3
+        FROM
+            NGram
+        """
+
+        cursor.execute(sql)
+
+        try:
+            return cursor.fetchall()
+        finally: 
+            connection.close()
 
     def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000, rand=False):
         """Generate sentances from the ngrams
