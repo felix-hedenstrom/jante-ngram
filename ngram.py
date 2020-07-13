@@ -101,14 +101,15 @@ class NGramManager:
 
         cursor = connection.cursor() 
 
-        ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
+        seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
+
 
         target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_right=False, left_pad_symbol=None)
 
-        if len(ngrams) == 0:
+        if len(seed_ngrams) == 0:
             seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
         else:
-            seed_ngram = ngrams[-1]
+            seed_ngram = seed_ngrams[-1]
 
         if len(target_ngrams) == 0:
             target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
@@ -120,35 +121,26 @@ class NGramManager:
         (
             -- Base condition
             SELECT
-                TokenText1 || " " || TokenText2 || " " || TokenText3 AS SentanceText, 
-                TokenText2,
-                TokenText3,
+                {' || " " || '.join(map(lambda i: f"TokenText{i}", range(1, self._n + 1)))} AS SentanceText,
+                {",".join(map(lambda i: f"TokenText{i}", range(2, self._n + 1)))},
                 1 AS Depth
                 {',RANDOM()' if rand else ''} 
             FROM
                 NGram{self._n}
             WHERE
-                (
-                    TokenText1 = :seedw1 
-                )
-                AND
-                (
-                    TokenText2 = :seedw2
-                )
+                {" AND ".join(map(lambda i: f"( TokenText{i} = :seedw{i} )", range(1, self._n)))}
 
             UNION ALL
 
             SELECT
-                GS.SentanceText || " " || NG.TokenText3 AS SentanceText,
-                NG.TokenText2,
-                NG.TokenText3,
+                GS.SentanceText || " " || NG.TokenText{self._n} AS SentanceText,
+                {",".join(map(lambda i: f"NG.TokenText{i}", range(2, self._n + 1)))},
                 GS.Depth + 1
                 {',RANDOM()' if rand else ''} 
             FROM
                 GeneratedSentance GS
                 JOIN NGram{self._n} NG ON
-                    NG.TokenText1 = GS.TokenText2 AND
-                    NG.TokenText2 = GS.TokenText3
+                    {" AND ".join(map(lambda i: f"( NG.TokenText{i} = GS.TokenText{i + 1} )", range(1, self._n)))}
             WHERE
                 GS.Depth <= :max_depth
             {'ORDER BY RANDOM()' if rand else ''} 
@@ -161,37 +153,35 @@ class NGramManager:
             GeneratedSentance GS
         WHERE
             GS.Depth >= :min_depth AND
-            (
-                GS.TokenText2 = :targetw1 
-                OR 
-                :targetw1 IS NULL
-            )
-            AND
-            (
-                GS.TokenText3 = :targetw2
-                OR
-                :targetw2 IS NULL
-            )
+            { " AND ".join(map(lambda i: f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) ", range(1, self._n))) }
         LIMIT
             :limit
         """
 
-        cursor.execute(sql, {  
-                "limit": limit,
-                "end_token": RIGHT_PAD_SYMBOL, 
-                "min_depth": min_length, 
-                "max_depth": max_length, 
-                "seedw1": seed_ngram[0], 
-                "seedw2": seed_ngram[1], 
-                "targetw1": target_ngram[0],
-                "targetw2": target_ngram[1],
-                "row_limit": row_limit
-            })
 
-        try:
-            return list(map(lambda x: x[0], cursor.fetchall()))
-        finally: 
-            connection.close()
+        parameters = {
+            "limit": limit,
+            "min_depth": min_length, 
+            "max_depth": max_length, 
+            "row_limit": row_limit
+        }
+
+        for i in range(0, self._n - 1):
+            parameters[f"seedw{i+1}"] = seed_ngram[i]
+            parameters[f"targetw{i+1}"] = target_ngram[i]
+
+        #print(sql)
+        print(seed_ngram)
+        #print(target_ngram)
+        #print(parameters)
+
+        cursor.execute(sql, parameters)
+        answers = map(lambda x: x[0], cursor.fetchall())
+        connection.close()
+
+        answer_prefix = " ".join(map(lambda t: t[0], seed_ngrams[:-1])) 
+
+        return list(map(lambda answer: f"{answer_prefix} {answer}", answers)) 
 
 
     def insert(self, text):
