@@ -103,8 +103,7 @@ class NGramManager:
 
         seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
 
-
-        target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_right=False, left_pad_symbol=None)
+        target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_left=False)
 
         if len(seed_ngrams) == 0:
             seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
@@ -188,18 +187,14 @@ class NGramManager:
             parameters[f"seedw{i+1}"] = seed_ngram[i]
             parameters[f"targetw{i+1}"] = target_ngram[i]
 
-        #print(sql)
-        print(seed_ngram)
-        #print(target_ngram)
-        #print(parameters)
-
         cursor.execute(sql, parameters)
         answers = map(lambda x: x[0], cursor.fetchall())
         connection.close()
 
         answer_prefix = " ".join(map(lambda t: t[0], seed_ngrams[:-1])) 
+        answer_suffix = " ".join(map(lambda t: t[0], target_ngrams[self._n - 1:])) 
 
-        return list(map(lambda answer: f"{answer_prefix} {answer}", answers)) 
+        return list(map(lambda answer: f"{answer_prefix} {answer} {answer_suffix}", answers)) 
 
 
     def insert(self, text):
