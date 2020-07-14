@@ -72,7 +72,7 @@ class NGramManager:
             connection.close()
 
     def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000, rand=False):
-        """Generate sentances from the ngrams
+        """Generate sentences from the ngrams
 
         Generate a text based on chained ngrams
 
@@ -117,30 +117,45 @@ class NGramManager:
             target_ngram = target_ngrams[0]
 
         sql = f"""
-        WITH GeneratedSentance AS
+        WITH GeneratedSentence AS
         (
             -- Base condition
             SELECT
-                {' || " " || '.join(map(lambda i: f"TokenText{i}", range(1, self._n + 1)))} AS SentanceText,
-                {",".join(map(lambda i: f"TokenText{i}", range(2, self._n + 1)))},
+                {' || " " || '.join(
+                    map(
+                        lambda i: f"TokenText{i}", 
+                        range(1, self._n + 1)))} AS SentenceText,
+                {",".join(
+                    map(
+                        lambda i: f"TokenText{i}", 
+                        range(2, self._n + 1)))},
                 1 AS Depth
                 {',RANDOM()' if rand else ''} 
             FROM
                 NGram{self._n}
             WHERE
-                {" AND ".join(map(lambda i: f"( TokenText{i} = :seedw{i} )", range(1, self._n)))}
+                {" AND ".join(
+                    map(
+                        lambda i: f"( TokenText{i} = :seedw{i} )", 
+                        range(1, self._n)))}
 
             UNION ALL
 
             SELECT
-                GS.SentanceText || " " || NG.TokenText{self._n} AS SentanceText,
-                {",".join(map(lambda i: f"NG.TokenText{i}", range(2, self._n + 1)))},
+                GS.SentenceText || " " || NG.TokenText{self._n} AS SentenceText,
+                {",".join(
+                    map(
+                        lambda i: f"NG.TokenText{i}", 
+                        range(2, self._n + 1)))},
                 GS.Depth + 1
                 {',RANDOM()' if rand else ''} 
             FROM
-                GeneratedSentance GS
+                GeneratedSentence GS
                 JOIN NGram{self._n} NG ON
-                    {" AND ".join(map(lambda i: f"( NG.TokenText{i} = GS.TokenText{i + 1} )", range(1, self._n)))}
+                    {" AND ".join(
+                        map(
+                            lambda i: f"( NG.TokenText{i} = GS.TokenText{i + 1} )", 
+                            range(1, self._n)))}
             WHERE
                 GS.Depth <= :max_depth
             {'ORDER BY RANDOM()' if rand else ''} 
@@ -148,12 +163,15 @@ class NGramManager:
 
         ) 
         SELECT
-            GS.SentanceText
+            GS.SentenceText
         FROM
-            GeneratedSentance GS
+            GeneratedSentence GS
         WHERE
             GS.Depth >= :min_depth AND
-            { " AND ".join(map(lambda i: f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) ", range(1, self._n))) }
+            { " AND ".join(
+                map(
+                    lambda i: f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) ", 
+                    range(1, self._n))) }
         LIMIT
             :limit
         """
@@ -211,6 +229,3 @@ class NGramManager:
 
         connection.commit()
         connection.close()
-        
-        
-
