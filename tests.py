@@ -3,10 +3,46 @@
 import ngram
 import sqlite3
 import os
+import unittest
+
+class TestNGram(unittest.TestCase):
+
+    def test_basic(self):
+
+        ngm = ngram.NGramManager(":memory:", 3)
+
+        ngm.insert("this is a test. tests are cool.")
+
+        self.assertEqual(1, len(ngm.generate("this", "cool.")))  
+
+        ngm.insert("this is also very cool.")
+        self.assertEqual(2, len(ngm.generate("this", "cool.")))
+
+    def test_threading(self):
+
+        import threading
+
+        ngm = ngram.NGramManager(":memory:", 3)
+
+        # Using sqlite3 connections without check_same_thread results in an error when trying to access it from a thread other than the one that created it
+        # Since check_same_thread = True we should get no such error and everything should work as we expect
+
+        thread1 = threading.Thread(target=lambda: ngm.insert("I live in thread1 and I love it here!"))
+        thread2 = threading.Thread(target=lambda: ngm.insert("I live in thread2 and I love it here!"))
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
+
+        self.assertEqual(set(["I live in thread1 and I love it here!", "I live in thread2 and I love it here!"]), set(ngm.generate("I", "here!")))
 
 if __name__ == "__main__":
+    unittest.main()
+
+if __name__ == "__main__" and False:
     
-    path = "/tmp/test.db"
 
     try:
         os.remove(path)
