@@ -3,26 +3,29 @@
 import sqlite3
 import nltk
 import os
+from enum import Enum
+from threading import Lock
 
 LEFT_PAD_SYMBOL = "<s>"
 RIGHT_PAD_SYMBOL = "</s>"
 NEWLINE = os.linesep 
 
+class LimitType:
+    Unlimited = 1
+
 class NGramManager:
+
     def __init__(self, path, n=3):
 
         if not type(n) == int:
             return ValueError("n must be an integer")
 
-        self._db_path = path
-
-        connection = sqlite3.connect(self._db_path)
-
-        cursor = connection.cursor() 
-
         self._n = n
+        self._db_path = path
+        self._connection_lock = Lock()
+        self._connection = sqlite3.connect(self._db_path, check_same_thread=False)
 
-        sql = f"""
+        init_sql = f"""
         CREATE TABLE IF NOT EXISTS NGram{n} 
         (
 
@@ -37,10 +40,9 @@ class NGramManager:
                                     range(1, n + 1)))})
         )"""
 
-        cursor.execute(sql)
-        
-        connection.commit()
-        connection.close()
+        cursor = self._connection.cursor()
+        cursor.execute(init_sql)
+        self._connection.commit()
 
     def generate_ngrams(text, n, pad_right=True, pad_left=True, right_pad_symbol=RIGHT_PAD_SYMBOL, left_pad_symbol=LEFT_PAD_SYMBOL):
         return list(nltk.ngrams(
@@ -53,10 +55,6 @@ class NGramManager:
     
     def get_all(self):
 
-        connection = sqlite3.connect(self._db_path)
-
-        cursor = connection.cursor() 
-
         sql = f"""
         SELECT
             {",".join(map(lambda i: "TokenText" + str(i), range(1, self._n + 1)))} 
@@ -64,14 +62,13 @@ class NGramManager:
             NGram{self._n}
         """
 
-        cursor.execute(sql)
+        with self._connection_lock: 
+            cursor = self._connection.cursor() 
+            cursor.execute(sql)
 
-        try:
             return cursor.fetchall()
-        finally: 
-            connection.close()
 
-    def generate(self, seed="", ending="", max_length=None, min_length=4, limit=1, row_limit=10000000, rand=False):
+    def generate(self, seed="", ending="", max_length=None, min_length=2, limit=LimitType.Unlimited, row_limit=10000000, rand=False):
         """Generate sentences from the ngrams
 
         Generate a text based on chained ngrams
@@ -97,9 +94,6 @@ class NGramManager:
         if max_length < min_length:
             raise ValueError("max_length cannot be lower than min_length") 
 
-        connection = sqlite3.connect(self._db_path)
-
-        cursor = connection.cursor() 
 
         seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
 
@@ -171,8 +165,7 @@ class NGramManager:
                 map(
                     lambda i: f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) ", 
                     range(1, self._n))) }
-        LIMIT
-            :limit
+        {"LIMIT :limit" if limit != LimitType.Unlimited else ""} 
         """
 
 
@@ -187,21 +180,17 @@ class NGramManager:
             parameters[f"seedw{i+1}"] = seed_ngram[i]
             parameters[f"targetw{i+1}"] = target_ngram[i]
 
-        cursor.execute(sql, parameters)
-        answers = map(lambda x: x[0], cursor.fetchall())
-        connection.close()
+        with self._connection_lock:
+            cursor = self._connection.cursor() 
+            cursor.execute(sql, parameters)
+            answers = map(lambda x: x[0], cursor.fetchall())
 
         answer_prefix = " ".join(map(lambda t: t[0], seed_ngrams[:-1])) 
         answer_suffix = " ".join(map(lambda t: t[0], target_ngrams[self._n - 1:])) 
 
         return list(map(lambda answer: f"{answer_prefix} {answer} {answer_suffix}", answers)) 
 
-
     def insert(self, text):
-
-        connection = sqlite3.connect(self._db_path)
-
-        cursor = connection.cursor() 
 
         sql = f"""
             INSERT OR IGNORE INTO NGram{self._n} (
@@ -211,16 +200,22 @@ class NGramManager:
             (
                 {",".join(["?"] * self._n)}
             )"""
-            
-        for line in text.split("\n"):
 
-            if line.strip() == "":
-                continue
-            
-            ngrams = NGramManager.generate_ngrams(line, self._n)
+        with self._connection_lock:
+            cursor = self._connection.cursor() 
+                
+            for line in text.split("\n"):
 
-            cursor.executemany(sql, ngrams)
+                if line.strip() == "":
+                    continue
+                
+                ngrams = NGramManager.generate_ngrams(line, self._n)
+
+                cursor.executemany(sql, ngrams)
 
 
-        connection.commit()
-        connection.close()
+            self._connection.commit()
+
+    def __del__(self):
+        with self._connection_lock:
+            self._connection.close()
