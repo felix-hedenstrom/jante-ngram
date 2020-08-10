@@ -3,6 +3,8 @@
 import sqlite3
 import nltk
 import os
+import re
+
 from enum import Enum
 from threading import Lock
 
@@ -68,7 +70,7 @@ class NGramManager:
 
             return cursor.fetchall()
 
-    def generate(self, seed="", ending="", max_length=None, min_length=2, limit=LimitType.Unlimited, row_limit=10000000, rand=False):
+    def generate(self, seed="", ending="", max_length=None, min_length=2, limit=LimitType.Unlimited, row_limit=10000000, rand=False, strip=True):
         """Generate sentences from the ngrams
 
         Generate a text based on chained ngrams
@@ -188,7 +190,12 @@ class NGramManager:
         answer_prefix = " ".join(map(lambda t: t[0], seed_ngrams[:-1])) 
         answer_suffix = " ".join(map(lambda t: t[0], target_ngrams[self._n - 1:])) 
 
-        return list(map(lambda answer: f"{answer_prefix} {answer} {answer_suffix}", answers)) 
+        pure_answers = list(map(lambda answer: f"{answer_prefix} {answer} {answer_suffix}", answers)) 
+
+        if strip:
+            return [re.sub(f"({LEFT_PAD_SYMBOL})|({RIGHT_PAD_SYMBOL})", "", answer).strip() for answer in pure_answers]
+
+        return pure_answers
 
     def insert(self, text):
 
