@@ -5,38 +5,62 @@ import sqlite3
 import os
 import unittest
 
+max_test_n = 5
+
 class TestNGram(unittest.TestCase):
 
     def test_basic(self):
+        for i in range(2, max_test_n):
+            ngm = ngram.NGramManager(":memory:", i)
 
-        ngm = ngram.NGramManager(":memory:", 3)
+            ngm.insert("this is a test. tests are cool.")
 
-        ngm.insert("this is a test. tests are cool.")
+            self.assertEqual(1, len(ngm.generate("this", "cool.")))  
 
-        self.assertEqual(1, len(ngm.generate("this", "cool.")))  
-
-        ngm.insert("this is also very cool.")
-        self.assertEqual(2, len(ngm.generate("this", "cool.")))
+            ngm.insert("this is also very cool.")
+            self.assertEqual(2, len(ngm.generate("this", "cool.")))
 
     def test_threading(self):
 
         import threading
 
-        ngm = ngram.NGramManager(":memory:", 3)
+        for i in range(2, max_test_n):
+            ngm = ngram.NGramManager(":memory:", i)
 
-        # Using sqlite3 connections without check_same_thread results in an error when trying to access it from a thread other than the one that created it
-        # Since check_same_thread = True we should get no such error and everything should work as we expect
+            # Using sqlite3 connections without check_same_thread results in an error when trying to access it from a thread other than the one that created it
+            # Since check_same_thread = True we should get no such error and everything should work as we expect
 
-        thread1 = threading.Thread(target=lambda: ngm.insert("I live in thread1 and I love it here!"))
-        thread2 = threading.Thread(target=lambda: ngm.insert("I live in thread2 and I love it here!"))
+            thread1 = threading.Thread(target=lambda: ngm.insert("Hello thread1 here!"))
+            thread2 = threading.Thread(target=lambda: ngm.insert("Hello thread2 here!"))
 
-        thread1.start()
-        thread2.start()
+            thread1.start()
+            thread2.start()
 
-        thread1.join()
-        thread2.join()
+            thread1.join()
+            thread2.join()
 
-        self.assertEqual(set(["I live in thread1 and I love it here!", "I live in thread2 and I love it here!"]), set(ngm.generate("I", "here!")))
+            self.assertEqual(set(["Hello thread1 here!", "Hello thread2 here!"]), set(ngm.generate("Hello", "here!")))
+
+    def test_general_ending(self):
+        for i in range(2, max_test_n):
+            ngm = ngram.NGramManager(":memory:", i)
+
+            ngm.insert("This sentence ends with a 1")
+            ngm.insert("This sentence ends with a 2")
+            ngm.insert("This sentence ends with a 3")
+
+
+            self.assertEqual(3, len(ngm.generate("This")))
+
+    def test_general_beginning(self):
+        for i in range(2, max_test_n):
+            ngm = ngram.NGramManager(":memory:", 3)
+
+            ngm.insert("This is a sentence that can end with a 1")
+            ngm.insert("This is a sentence that can end with a 2")
+            ngm.insert("This is a sentence that can end with a 3")
+
+            self.assertEqual(3, len(ngm.generate()))
 
 if __name__ == "__main__":
     unittest.main()
