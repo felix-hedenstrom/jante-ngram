@@ -33,14 +33,9 @@ class NGramManager:
         (
 
             {("," + NEWLINE).join(
-                map(
-                    lambda i: 
-                        "TokenText" + str(i) + " TEXT NOT NULL", 
-                    range(1, self._n + 1)))}
+                [f"TokenText{i} TEXT NOT NULL" for i in range(1, self._n + 1)])}
             ,PRIMARY KEY ({",".join(
-                                map(
-                                    lambda i: f"TokenText{i}", 
-                                    range(1, n + 1)))})
+                            [f"TokenText{i}" for i in range(1, n + 1)])})
         )"""
 
         cursor = self._connection.cursor()
@@ -60,7 +55,8 @@ class NGramManager:
 
         sql = f"""
         SELECT
-            {",".join(map(lambda i: "TokenText" + str(i), range(1, self._n + 1)))} 
+            {",".join(
+                [f"TokenText{i}" for i in range(1, self._n + 1)])} 
         FROM
             NGram{self._n}
         """
@@ -195,12 +191,12 @@ class NGramManager:
         with self._connection_lock:
             cursor = self._connection.cursor() 
             cursor.execute(sql, parameters)
-            answers = map(lambda x: x[0], cursor.fetchall())
+            answers = [x[0] for x in cursor.fetchall()]
 
-        answer_prefix = " ".join(map(lambda t: t[0], seed_ngrams[:-1])) 
-        answer_suffix = " ".join(map(lambda t: t[0], target_ngrams[self._n - 1:])) 
+        answer_prefix = " ".join([t[0] for t in seed_ngrams[:-1]]) 
+        answer_suffix = " ".join([t[0] for t in target_ngrams[self._n - 1:]]) 
 
-        pure_answers = list(map(lambda answer: f"{answer_prefix} {answer} {answer_suffix}", answers)) 
+        pure_answers = [f"{answer_prefix} {answer} {answer_suffix}" for answer in answers]
 
         if strip:
             return [re.sub(f"({LEFT_PAD_SYMBOL})|({RIGHT_PAD_SYMBOL})", "", answer).strip() for answer in pure_answers]
@@ -211,7 +207,8 @@ class NGramManager:
 
         sql = f"""
             INSERT OR IGNORE INTO NGram{self._n} (
-                {",".join(map(lambda i: "TokenText" + str(i), range(1, self._n + 1)))}
+                {",".join(
+                    [f"TokenText{i}" for i in range(1, self._n + 1)])}
             )
             VALUES
             (
