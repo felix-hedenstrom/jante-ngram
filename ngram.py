@@ -13,7 +13,7 @@ RIGHT_PAD_SYMBOL = "</s>"
 NEWLINE = os.linesep 
 
 class LimitType:
-    Unlimited = 1
+    Unlimited = 0
 
 
 class NGramManager:

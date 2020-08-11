@@ -49,8 +49,8 @@ class TestNGram(unittest.TestCase):
             ngm.insert("This sentence ends with a 2")
             ngm.insert("This sentence ends with a 3")
 
-
             self.assertEqual(3, len(ngm.generate("This")))
+
 
     def test_general_beginning(self):
         for i in range(2, max_test_n):
@@ -62,6 +62,19 @@ class TestNGram(unittest.TestCase):
 
             self.assertEqual(3, len(ngm.generate()))
 
+    def test_limit(self):
+        ngm = ngram.NGramManager(":memory:", 3)
+
+        ngm.insert("This sentence ends with a 1")
+        self.assertEqual(1, len(ngm.generate("This", limit=2)))
+
+        ngm.insert("This sentence ends with a 2")
+        self.assertEqual(2, len(ngm.generate("This", limit=2)))
+
+        ngm.insert("This sentence ends with a 3")
+        # There are three ways to finish but since we limit it to 2 we should always get 2
+        self.assertEqual(2, len(ngm.generate("This", limit=2)))
+        self.assertEqual(1, len(ngm.generate("This", limit=1)))
 
     def test_partial_sentence(self):
         # Not applicable to 2Gram since they start with a seed of length 1
