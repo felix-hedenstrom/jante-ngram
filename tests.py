@@ -73,8 +73,8 @@ class TestNGram(unittest.TestCase):
             # When looking for full sentences, we should not find anything, since the only start token is "Hello" and the only end token is "happy!" 
             self.assertEqual(0, len(ngm.generate("I love", "it")))
 
-            self.assertEqual(1, len(ngm.generate("I love", "it", partial=True)))
-            self.assertEqual(2, len(ngm.generate("I", "it", partial=True)))
+            self.assertEqual(set(['I love writing words. I enjoy it', 'I love writing words. I enjoy it because it']), set(ngm.generate("I love", "it", partial=True)))
+            self.assertEqual(set(['I enjoy it because it', 'I love writing words. I enjoy it', 'I love writing words. I enjoy it because it']), set(ngm.generate("I", "it", partial=True)))
 
 if __name__ == "__main__":
     unittest.main()

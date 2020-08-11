@@ -106,27 +106,25 @@ class NGramManager:
         if max_length < min_length:
             raise ValueError("max_length cannot be lower than min_length") 
 
+
+        # Create the ngrams that we seek
         seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_left=not partial, pad_right=False)
 
         target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_left=False, pad_right=not partial)
 
-        if len(seed_ngrams) == 0:
-            if partial:
-                seed_ngram = []
-            else:
+        if partial:
+            seed_ngram = seed.split()[-self._n + 1:]
+            target_ngram = ending.split()[:self._n - 1]
+        else:
+            if len(seed_ngrams) == 0:
                 seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
-        else:
-            seed_ngram = seed_ngrams[-1]
-
-        if len(target_ngrams) == 0:
-            if partial:
-                target_ngram = []
             else:
-                target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
-        else:
-            target_ngram = target_ngrams[0]
+                seed_ngram = seed_ngrams[-1]
 
-        #print(seed, partial, seed_ngram)
+            if len(target_ngrams) == 0:
+                target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
+            else:
+                target_ngram = target_ngrams[0]
 
         sql = f"""
         WITH GeneratedSentence AS
@@ -143,7 +141,7 @@ class NGramManager:
                 NGram{self._n}
             WHERE
                 {" AND ".join(
-                    [f"( TokenText{i} = :seedw{i} )" for i in range(1, self._n)])}
+                    [f"( TokenText{i} = :seedw{i} )" for i in range(1, len(seed_ngram) + 1)])}
 
             UNION ALL
 
@@ -168,12 +166,10 @@ class NGramManager:
         FROM
             GeneratedSentence GS
         WHERE
-            GS.Depth >= :min_depth AND
-            { " AND ".join(
-                [f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) " for i in range(1, self._n)]) }
+            GS.Depth >= :min_depth 
+            { "".join([f" AND GS.TokenText{i + 1 + (self._n - len(target_ngram) - 1)} = :targetw{i} " for i in range(1, len(target_ngram) + 1)]) }
         {"" if limit == LimitType.Unlimited else "LIMIT :limit"} 
         """
-
 
         parameters = {
             "limit": limit,
