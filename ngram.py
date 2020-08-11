@@ -140,8 +140,9 @@ class NGramManager:
             FROM
                 NGram{self._n}
             WHERE
-                {" AND ".join(
-                    [f"( TokenText{i} = :seedw{i} )" for i in range(1, len(seed_ngram) + 1)])}
+                1 = 1 
+                {"".join(
+                    [f"AND ( TokenText{i} = :seedw{i} )" for i in range(1, len(seed_ngram) + 1)])}
 
             UNION ALL
 

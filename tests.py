@@ -88,6 +88,7 @@ class TestNGram(unittest.TestCase):
 
             self.assertEqual(set(['I love writing words. I enjoy it', 'I love writing words. I enjoy it because it']), set(ngm.generate("I love", "it", partial=True)))
             self.assertEqual(set(['I enjoy it because it', 'I love writing words. I enjoy it', 'I love writing words. I enjoy it because it']), set(ngm.generate("I", "it", partial=True)))
+            self.assertTrue(len(ngm.generate(partial=True)) > 1)
 
 if __name__ == "__main__":
     unittest.main()
