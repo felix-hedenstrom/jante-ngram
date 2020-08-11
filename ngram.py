@@ -15,6 +15,7 @@ NEWLINE = os.linesep
 class LimitType:
     Unlimited = 1
 
+
 class NGramManager:
 
     def __init__(self, path, n=3):
@@ -46,7 +47,7 @@ class NGramManager:
         cursor.execute(init_sql)
         self._connection.commit()
 
-    def generate_ngrams(text, n, pad_right=True, pad_left=True, right_pad_symbol=RIGHT_PAD_SYMBOL, left_pad_symbol=LEFT_PAD_SYMBOL):
+    def generate_ngrams(text, n, pad_left=True, pad_right=True, left_pad_symbol=LEFT_PAD_SYMBOL, right_pad_symbol=RIGHT_PAD_SYMBOL):
         return list(nltk.ngrams(
                 nltk.pad_sequence(
                     text.split(),
@@ -70,7 +71,7 @@ class NGramManager:
 
             return cursor.fetchall()
 
-    def generate(self, seed="", ending="", max_length=None, min_length=2, limit=LimitType.Unlimited, row_limit=10000000, rand=False, strip=True):
+    def generate(self, seed="", ending="", max_length=None, min_length=2, limit=LimitType.Unlimited, row_limit=10000000, rand=False, strip=True, partial=False):
         """Generate sentences from the ngrams
 
         Generate a text based on chained ngrams
@@ -88,6 +89,19 @@ class NGramManager:
             max number of returned ngrams
         row_limit : int
             max number of ngrams that will be kept in memory.
+        strip : bool
+            should the start and end tokens be stripped?
+        partial : bool
+            should partial matches be returned? 
+            Example:
+                
+                Insert the sentence "Hello I love dogs because they are cute!" into an empty NGramManager
+
+                using partial=True with seed="I" and ending="dogs" the sentence "I love dogs" could be generated.
+
+                Without it, no results could be found, since there is no ngram [LEFT_PAD_SYMBOL, ..., "I"] in the NGramManager.
+
+                This does not apply to 2Gram, since they don't get padded and only the exact word is targetet.
         """
 
         if max_length is None:
@@ -96,20 +110,27 @@ class NGramManager:
         if max_length < min_length:
             raise ValueError("max_length cannot be lower than min_length") 
 
+        seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_left=not partial, pad_right=False)
 
-        seed_ngrams = NGramManager.generate_ngrams(seed, n=self._n - 1, pad_right=False)
-
-        target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_left=False)
+        target_ngrams = NGramManager.generate_ngrams(ending, n=self._n - 1, pad_left=False, pad_right=not partial)
 
         if len(seed_ngrams) == 0:
-            seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
+            if partial:
+                seed_ngram = []
+            else:
+                seed_ngram = [LEFT_PAD_SYMBOL] * (self._n - 1)
         else:
             seed_ngram = seed_ngrams[-1]
 
         if len(target_ngrams) == 0:
-            target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
+            if partial:
+                target_ngram = []
+            else:
+                target_ngram = [RIGHT_PAD_SYMBOL] * (self._n - 1)
         else:
             target_ngram = target_ngrams[0]
+
+        #print(seed, partial, seed_ngram)
 
         sql = f"""
         WITH GeneratedSentence AS
@@ -117,45 +138,34 @@ class NGramManager:
             -- Base condition
             SELECT
                 {' || " " || '.join(
-                    map(
-                        lambda i: f"TokenText{i}", 
-                        range(1, self._n + 1)))} AS SentenceText,
+                    [f"TokenText{i}" for i in range(1, self._n + 1)])} AS SentenceText,
                 {",".join(
-                    map(
-                        lambda i: f"TokenText{i}", 
-                        range(2, self._n + 1)))},
+                    [f"TokenText{i}" for i in range(2, self._n + 1)])},
                 1 AS Depth
                 {',RANDOM()' if rand else ''} 
             FROM
                 NGram{self._n}
             WHERE
                 {" AND ".join(
-                    map(
-                        lambda i: f"( TokenText{i} = :seedw{i} )", 
-                        range(1, self._n)))}
+                    [f"( TokenText{i} = :seedw{i} )" for i in range(1, self._n)])}
 
             UNION ALL
 
             SELECT
                 GS.SentenceText || " " || NG.TokenText{self._n} AS SentenceText,
                 {",".join(
-                    map(
-                        lambda i: f"NG.TokenText{i}", 
-                        range(2, self._n + 1)))},
+                    [f"NG.TokenText{i}" for i in range(2, self._n + 1)])},
                 GS.Depth + 1
                 {',RANDOM()' if rand else ''} 
             FROM
                 GeneratedSentence GS
                 JOIN NGram{self._n} NG ON
                     {" AND ".join(
-                        map(
-                            lambda i: f"( NG.TokenText{i} = GS.TokenText{i + 1} )", 
-                            range(1, self._n)))}
+                        [f"( NG.TokenText{i} = GS.TokenText{i + 1} )" for i in range(1, self._n)])}
             WHERE
                 GS.Depth <= :max_depth
             {'ORDER BY RANDOM()' if rand else ''} 
             LIMIT :row_limit 
-
         ) 
         SELECT
             GS.SentenceText
@@ -164,10 +174,8 @@ class NGramManager:
         WHERE
             GS.Depth >= :min_depth AND
             { " AND ".join(
-                map(
-                    lambda i: f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) ", 
-                    range(1, self._n))) }
-        {"LIMIT :limit" if limit != LimitType.Unlimited else ""} 
+                [f" ( GS.TokenText{i + 1} = :targetw{i} OR :targetw{i} IS NULL ) " for i in range(1, self._n)]) }
+        {"" if limit == LimitType.Unlimited else "LIMIT :limit"} 
         """
 
 
@@ -178,8 +186,10 @@ class NGramManager:
             "row_limit": row_limit
         }
 
-        for i in range(0, self._n - 1):
+        for i in range(len(seed_ngram)): 
             parameters[f"seedw{i+1}"] = seed_ngram[i]
+
+        for i in range(len(target_ngram)):
             parameters[f"targetw{i+1}"] = target_ngram[i]
 
         with self._connection_lock:

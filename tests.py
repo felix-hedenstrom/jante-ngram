@@ -54,13 +54,27 @@ class TestNGram(unittest.TestCase):
 
     def test_general_beginning(self):
         for i in range(2, max_test_n):
-            ngm = ngram.NGramManager(":memory:", 3)
+            ngm = ngram.NGramManager(":memory:", i)
 
-            ngm.insert("This is a sentence that can end with a 1")
-            ngm.insert("This is a sentence that can end with a 2")
-            ngm.insert("This is a sentence that can end with a 3")
+            ngm.insert("This sentence ends with a 1")
+            ngm.insert("This sentence ends with a 2")
+            ngm.insert("This sentence ends with a 3")
 
             self.assertEqual(3, len(ngm.generate()))
+
+
+    def test_partial_sentence(self):
+        # Not applicable to 2Gram since they start with a seed of length 1
+        for i in range(3, max_test_n):
+            ngm = ngram.NGramManager(":memory:", i)
+
+            ngm.insert("Hello I love writing words. I enjoy it because it makes me feel happy!") 
+
+            # When looking for full sentences, we should not find anything, since the only start token is "Hello" and the only end token is "happy!" 
+            self.assertEqual(0, len(ngm.generate("I love", "it")))
+
+            self.assertEqual(1, len(ngm.generate("I love", "it", partial=True)))
+            self.assertEqual(2, len(ngm.generate("I", "it", partial=True)))
 
 if __name__ == "__main__":
     unittest.main()
