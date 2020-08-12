@@ -191,7 +191,7 @@ class NGramManager:
             answers = [x[0] for x in cursor.fetchall()]
 
         answer_prefix = " ".join([t[0] for t in seed_ngrams[:-1]]) 
-        answer_suffix = " ".join([t[0] for t in target_ngrams[self._n - 1:]]) 
+        answer_suffix = " ".join([t[-1] for t in target_ngrams[1:]]) 
 
         pure_answers = [f"{answer_prefix} {answer} {answer_suffix}" for answer in answers]
 

@@ -76,6 +76,26 @@ class TestNGram(unittest.TestCase):
         self.assertEqual(2, len(ngm.generate("This", limit=2)))
         self.assertEqual(1, len(ngm.generate("This", limit=1)))
 
+    def test_long_seed(self):
+        ngm = ngram.NGramManager(":memory:", 3)
+        ngm.insert("This is a longer sentence that has an ending that is interesting")
+
+        self.assertEqual("Here is a longer sentence that has an ending that is interesting", ngm.generate("Here is a longer")[0])
+        self.assertEqual("Here is a longer sentence that has an ending that is interesting", ngm.generate("Here is a longer", ending="interesting")[0])
+
+        self.assertEqual("Here is a longer sentence that has an ending that is interesting", ngm.generate("Here is a longer", ending="interesting", partial=True)[0])
+        self.assertEqual("Here is a longer sentence that has", ngm.generate("Here is a longer", ending="has", partial=True)[0])
+
+    def test_long_ending(self):
+        ngm = ngram.NGramManager(":memory:", 3)
+        ngm.insert("This is a longer sentence that has an ending that is interesting")
+
+        self.assertEqual("This is a longer sentence that has an ending that is interesting because it seems fun", ngm.generate(ending="is interesting because it seems fun")[0])
+        self.assertEqual("This is a longer sentence that has an ending that is interesting because it seems fun", ngm.generate("This", "is interesting because it seems fun")[0])
+
+        # Last word should be the word "be"
+        self.assertEqual("be", ngm.generate(ending="is interesting because it needs to be", partial=True)[0].split()[-1])
+
     def test_partial_sentence(self):
         # Not applicable to 2Gram since they start with a seed of length 1
         for i in range(3, max_test_n):
