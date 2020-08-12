@@ -28,18 +28,23 @@ class NGramManager:
         self._connection_lock = Lock()
         self._connection = sqlite3.connect(self._db_path, check_same_thread=False)
 
-        init_sql = f"""
+        init_table_sql = f"""
         CREATE TABLE IF NOT EXISTS NGram{n} 
         (
 
-            {("," + NEWLINE).join(
+            {", ".join(
                 [f"TokenText{i} TEXT NOT NULL" for i in range(1, self._n + 1)])}
             ,PRIMARY KEY ({",".join(
                             [f"TokenText{i}" for i in range(1, n + 1)])})
-        )"""
+        );"""
+
+        init_index_sql = f"""
+        CREATE INDEX IF NOT EXISTS NGramReverse{n} ON NGram{n}({", ".join([f"TokenText{i}" for i in reversed(range(1, self._n + 1))])});
+        """
 
         cursor = self._connection.cursor()
-        cursor.execute(init_sql)
+        cursor.execute(init_table_sql)
+        cursor.execute(init_index_sql)
         self._connection.commit()
 
     def generate_ngrams(text, n, pad_left=True, pad_right=True, left_pad_symbol=LEFT_PAD_SYMBOL, right_pad_symbol=RIGHT_PAD_SYMBOL):
