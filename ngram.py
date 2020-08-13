@@ -131,6 +131,16 @@ class NGramManager:
             else:
                 target_ngram = target_ngrams[0]
 
+        early_filter_sql = f"""
+        SELECT
+            1
+        FROM
+            NGram{self._n} NG
+        WHERE
+            { "AND".join([f"( NG.TokenText{i + 1 + (self._n - len(target_ngram) - 1)} = :targetw{i} )" for i in range(1, len(target_ngram) + 1)]) }
+        LIMIT 1
+        """
+
         sql = f"""
         WITH GeneratedSentence AS
         (
@@ -191,6 +201,17 @@ class NGramManager:
             parameters[f"targetw{i+1}"] = target_ngram[i]
 
         with self._connection_lock:
+
+            if len(target_ngram) > 1:
+                # Do a check if the target even exists. If it does not exist, exit early
+                early_check_cursor = self._connection.cursor()
+                early_check_cursor.execute(early_filter_sql, parameters)
+
+                if not early_check_cursor.fetchone():
+                    return []
+
+                early_check_cursor.close()
+
             cursor = self._connection.cursor() 
             cursor.execute(sql, parameters)
             answers = [x[0] for x in cursor.fetchall()]
