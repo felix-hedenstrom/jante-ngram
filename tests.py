@@ -28,7 +28,7 @@ class TestNGram(unittest.TestCase):
             ngm = ngram.NGramManager(":memory:", i)
 
             # Using sqlite3 connections without check_same_thread results in an error when trying to access it from a thread other than the one that created it
-            # Since check_same_thread = True we should get no such error and everything should work as we expect
+            # Since check_same_thread = False we should get no such error and everything should work as we expect
 
             thread1 = threading.Thread(target=lambda: ngm.insert("Hello thread1 here!"))
             thread2 = threading.Thread(target=lambda: ngm.insert("Hello thread2 here!"))
