@@ -202,15 +202,16 @@ class NGramManager:
 
         with self._connection_lock:
 
-            if len(target_ngram) > 1:
+            if len(target_ngram) > 0:
                 # Do a check if the target even exists. If it does not exist, exit early
                 early_check_cursor = self._connection.cursor()
                 early_check_cursor.execute(early_filter_sql, parameters)
-
-                if not early_check_cursor.fetchone():
-                    return []
-
-                early_check_cursor.close()
+                
+                try:
+                    if early_check_cursor.fetchone() is None:
+                        return []
+                finally:
+                    early_check_cursor.close()
 
             cursor = self._connection.cursor() 
             cursor.execute(sql, parameters)

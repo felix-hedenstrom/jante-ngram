@@ -110,5 +110,18 @@ class TestNGram(unittest.TestCase):
             self.assertEqual(set(['I enjoy it because it', 'I love writing words. I enjoy it', 'I love writing words. I enjoy it because it']), set(ngm.generate("I", "it", partial=True)))
             self.assertTrue(len(ngm.generate(partial=True)) > 1)
 
+    def test_infinite_optimization(self):
+        # If you target something that isn't possible as a ngram, the generator should exit early
+
+        ngm = ngram.NGramManager(":memory:", 4)
+
+        # This allows for a infinite chain using the ngrams [The day after that is Wednesday.] repeating infinitely many times.
+        ngm.insert("Today is Monday. The day after today is Tuesday. The day after that is Wednesday. The day after that is Thursday") 
+
+
+        self.assertEqual([], ngm.generate("Today is", "Friday", max_length=20000000)) # Since friday does not exist within the ngrams, we should not be able to find it.
+        self.assertEqual([], ngm.generate("Today is", "Friday", max_length=20000000, partial=True)) # Since friday does not exist within the ngrams, we should not be able to find it.
+
+
 if __name__ == "__main__":
     unittest.main()
